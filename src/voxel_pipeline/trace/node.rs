@@ -1,8 +1,6 @@
 use super::{TracePipelineData, ViewTraceUniformBuffer};
 use crate::voxel_pipeline::{
-    attachments::RenderAttachments,
-    voxel_world::VoxelData, 
-    RenderGraphSettings,
+    attachments::RenderAttachments, voxel_world::VoxelData, RenderGraphSettings,
 };
 use bevy::{
     prelude::*,
@@ -10,6 +8,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_graph::{self, ViewNode},
         render_resource::*,
+        texture::GpuImage,
         view::ViewTarget,
     },
 };
@@ -51,7 +50,7 @@ impl ViewNode for TraceNode {
         let post_process = target.post_process_write();
         let destination = post_process.destination;
 
-        let gpu_images = world.get_resource::<RenderAssets<Image>>().unwrap();
+        let gpu_images = world.get_resource::<RenderAssets<GpuImage>>().unwrap();
 
         let normal = &gpu_images
             .get(&render_attachments.normal)
@@ -62,27 +61,24 @@ impl ViewNode for TraceNode {
             .expect("position image not found")
             .texture_view;
 
-        let trace_bind_group =
-            render_context
-                .render_device()
-                .create_bind_group(
-                    None,
-                    &trace_pipeline_data.trace_bind_group_layout,
-                    &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: trace_uniform_buffer.binding().unwrap(),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: BindingResource::TextureView(&normal),
-                        },
-                        BindGroupEntry {
-                            binding: 2,
-                            resource: BindingResource::TextureView(&position),
-                        },
-                    ],
-                );
+        let trace_bind_group = render_context.render_device().create_bind_group(
+            None,
+            &trace_pipeline_data.trace_bind_group_layout,
+            &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: trace_uniform_buffer.binding().unwrap(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&normal),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(&position),
+                },
+            ],
+        );
 
         let destination_descriptor = RenderPassDescriptor {
             label: Some("trace pass"),

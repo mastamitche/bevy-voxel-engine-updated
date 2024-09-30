@@ -4,12 +4,11 @@ use bevy::{
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
     prelude::*,
     render::{
-        Render,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         view::{ExtractedView, ViewTarget},
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
     utils::HashMap,
 };
@@ -27,16 +26,31 @@ impl Plugin for TracePlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "src/", "trace.wgsl");
 
-        load_internal_asset!(app, COMMON_HANDLE, "../shaders/common.wgsl", Shader::from_wgsl);
-        load_internal_asset!(app, BINDINGS_HANDLE, "../shaders/bindings.wgsl", Shader::from_wgsl);
-        load_internal_asset!(app, RAYTRACING_HANDLE, "../shaders/raytracing.wgsl", Shader::from_wgsl);
+        load_internal_asset!(
+            app,
+            COMMON_HANDLE,
+            "../shaders/common.wgsl",
+            Shader::from_wgsl
+        );
+        load_internal_asset!(
+            app,
+            BINDINGS_HANDLE,
+            "../shaders/bindings.wgsl",
+            Shader::from_wgsl
+        );
+        load_internal_asset!(
+            app,
+            RAYTRACING_HANDLE,
+            "../shaders/raytracing.wgsl",
+            Shader::from_wgsl
+        );
     }
 
     fn finish(&self, app: &mut App) {
         app.add_plugins(ExtractComponentPlugin::<TraceSettings>::default());
 
         // Setup custom render pipeline
-        
+
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
@@ -100,9 +114,9 @@ fn prepare_uniforms(
     let elapsed = time.elapsed_seconds_f64();
 
     for (entity, settings, view) in query.iter() {
-        let projection = view.projection;
+        let projection = view.clip_from_view;
         let inverse_projection = projection.inverse();
-        let view = view.transform.compute_matrix();
+        let view = view.world_from_view.compute_matrix();
         let inverse_view = view.inverse();
 
         let camera = projection * inverse_view;
@@ -126,14 +140,13 @@ fn prepare_uniforms(
         uniform_buffer.set_label(Some("view trace uniforms"));
         uniform_buffer.write_buffer(&render_device, &render_queue);
 
-        commands
-            .entity(entity)
-            .insert(ViewTraceUniformBuffer { buffer: uniform_buffer });
+        commands.entity(entity).insert(ViewTraceUniformBuffer {
+            buffer: uniform_buffer,
+        });
     }
 }
 
 impl FromWorld for TracePipelineData {
-
     fn from_world(render_world: &mut World) -> Self {
         let voxel_data = render_world.resource::<VoxelData>();
         let asset_server = render_world.resource::<AssetServer>();

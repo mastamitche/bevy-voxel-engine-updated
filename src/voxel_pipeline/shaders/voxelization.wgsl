@@ -38,7 +38,7 @@ struct VertexOutput {
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     
-    var model = mesh_functions::get_model_matrix(vertex.instance_index);
+    var model = mesh_functions::get_world_from_local(vertex.instance_index);
     out.pos = mesh_functions::mesh_position_local_to_clip(model, vec4<f32>(vertex.position, 1.0));
 
     out.uv = vertex.uv;

@@ -5,10 +5,10 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        Render, RenderApp, RenderSet,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        Render, RenderApp, RenderSet,
     },
 };
 use std::sync::Arc;
@@ -19,9 +19,9 @@ impl Plugin for VoxelWorldPlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let render_device = app.sub_app(RenderApp).world.resource::<RenderDevice>();
+        let render_device = app.sub_app(RenderApp).world().resource::<RenderDevice>();
 
-        let render_queue = app.sub_app(RenderApp).world.resource::<RenderQueue>();
+        let render_queue = app.sub_app(RenderApp).world().resource::<RenderQueue>();
 
         let gh = GH::empty(256);
         let buffer_size = gh.get_buffer_size();
@@ -34,7 +34,7 @@ impl Plugin for VoxelWorldPlugin {
             levels[i] = UVec4::new(gh.levels[i], 0, 0, 0);
             offsets[i] = UVec4::new(gh_offsets[i], 0, 0, 0);
         }
-    
+
         // Uniforms
         let voxel_uniforms = VoxelUniforms {
             pallete: gh.pallete.into(),
@@ -83,48 +83,47 @@ impl Plugin for VoxelWorldPlugin {
             ..default()
         });
 
-        let bind_group_layout =
-            render_device.create_bind_group_layout(
-                "voxelization bind group layout",
-                &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(VoxelUniforms::SHADER_SIZE.into()),
-                        },
-                        count: None,
+        let bind_group_layout = render_device.create_bind_group_layout(
+            "voxelization bind group layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(VoxelUniforms::SHADER_SIZE.into()),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadWrite,
-                            format: TextureFormat::R16Uint,
-                            view_dimension: TextureViewDimension::D3,
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadWrite,
+                        format: TextureFormat::R16Uint,
+                        view_dimension: TextureViewDimension::D3,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(4),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::VERTEX_FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(4),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            );
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        );
 
         let bind_group = render_device.create_bind_group(
             None,

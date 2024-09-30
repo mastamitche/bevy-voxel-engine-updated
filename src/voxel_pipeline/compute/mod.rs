@@ -2,11 +2,10 @@ use bevy::{
     asset::embedded_asset,
     prelude::*,
     render::{
-        Render,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
     utils::HashMap,
 };
@@ -31,9 +30,9 @@ impl Plugin for ComputeResourcesPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let render_device = app.sub_app(RenderApp).world.resource::<RenderDevice>();
+        let render_device = app.sub_app(RenderApp).world().resource::<RenderDevice>();
 
-        let render_queue = app.sub_app(RenderApp).world.resource::<RenderQueue>();
+        let render_queue = app.sub_app(RenderApp).world().resource::<RenderQueue>();
 
         let mut uniform_buffer = UniformBuffer::from(ComputeUniforms {
             time: 0.0,
@@ -57,42 +56,41 @@ impl Plugin for ComputeResourcesPlugin {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
 
-        let bind_group_layout =
-            render_device.create_bind_group_layout(
-                "compute bind group layout",
-                &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(ComputeUniforms::SHADER_SIZE.into()),
-                        },
-                        count: None,
+        let bind_group_layout = render_device.create_bind_group_layout(
+            "compute bind group layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(ComputeUniforms::SHADER_SIZE.into()),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(4),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(4),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(4),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(4),
                     },
-                ],
-            );
+                    count: None,
+                },
+            ],
+        );
 
         let bind_group = render_device.create_bind_group(
             None,

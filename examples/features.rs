@@ -4,12 +4,17 @@ use bevy::{
         fxaa::Fxaa,
     },
     prelude::*,
+    render::{
+        settings::{RenderCreation, WgpuSettings},
+        RenderPlugin,
+    },
 };
 use bevy_obj::*;
 use bevy_voxel_engine::*;
 use character::CharacterEntity;
 use rand::Rng;
 use std::f32::consts::PI;
+use wgpu::Backends;
 
 #[path = "common/character.rs"]
 mod character;
@@ -38,7 +43,15 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins((
-        DefaultPlugins,
+        DefaultPlugins.set(RenderPlugin {
+            render_creation: RenderCreation::Automatic(WgpuSettings {
+                backends: Some(
+                    Backends::BROWSER_WEBGPU | Backends::GL | Backends::VULKAN | Backends::METAL,
+                ),
+                ..default()
+            }),
+            ..default()
+        }),
         ObjPlugin,
         BevyVoxelEnginePlugin,
         character::Character,
@@ -55,7 +68,7 @@ fn main() {
             spawn_stuff,
         ),
     );
-    
+
     app.run();
 }
 
@@ -106,8 +119,7 @@ fn setup(
     }
 
     // Character
-    let character_transform = Transform::from_xyz(0.0, 60.0, 0.0)
-        .looking_at(Vec3::ZERO, Vec3::Y);
+    let character_transform = Transform::from_xyz(0.0, 60.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y);
 
     let projection = Projection::Perspective(PerspectiveProjection {
         fov: PI / 2.0,
@@ -163,7 +175,7 @@ fn setup(
     // Rotated portals
 
     let pos = vec![Vec3::new(5.0, 0.0, -5.0), Vec3::new(-5.0, 0.0, 5.0)];
-    
+
     for i in 0..2 {
         commands
             .spawn((
@@ -192,7 +204,7 @@ fn setup(
                 });
             });
     }
-    
+
     /*
     // voxelized mesh
     commands.spawn((

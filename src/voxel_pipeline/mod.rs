@@ -1,25 +1,21 @@
 use self::{
     attachments::AttachmentsPlugin,
     compute::{
-        animation::AnimationNode, automata::AutomataNode, clear::ClearNode,
-        physics::PhysicsNode, rebuild::RebuildNode, ComputeResourcesPlugin,
+        animation::AnimationNode, automata::AutomataNode, clear::ClearNode, physics::PhysicsNode,
+        rebuild::RebuildNode, ComputeResourcesPlugin,
     },
     trace::{TraceNode, TracePlugin},
     voxel_world::VoxelWorldPlugin,
     voxelization::VoxelizationPlugin,
 };
 use bevy::{
-    core_pipeline::{
-        fxaa::FxaaNode, 
-        tonemapping::TonemappingNode, 
-        upscaling::UpscalingNode,
-    },
+    core_pipeline::{fxaa::FxaaNode, tonemapping::TonemappingNode, upscaling::UpscalingNode},
     prelude::*,
     render::{
-        RenderApp,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         graph::CameraDriverLabel,
-        render_graph::{RenderGraph, RenderSubGraph, RenderLabel, ViewNodeRunner},
+        render_graph::{RenderGraph, RenderLabel, RenderSubGraph, ViewNodeRunner},
+        RenderApp,
     },
     ui::UiPassNode,
 };
@@ -64,11 +60,8 @@ impl Plugin for RenderPlugin {
             .add_plugins(VoxelizationPlugin)
             .add_plugins(ComputeResourcesPlugin);
 
-        let render_app = match app.get_sub_app_mut(RenderApp) {
-            Ok(render_app) => render_app,
-            Err(_) => return,
-        };
-        let render_world = &mut render_app.world;
+        let render_app = app.sub_app_mut(RenderApp);
+        let render_world = render_app.world_mut();
 
         // Build voxel render graph
         let mut voxel_graph = RenderGraph::default();
@@ -81,12 +74,24 @@ impl Plugin for RenderPlugin {
         let ui = UiPassNode::new(render_world);
         let upscaling = UpscalingNode::from_world(render_world);
 
-        voxel_graph.add_node(VoxelGraphLabel::Trace, ViewNodeRunner::new(trace, render_world));
+        voxel_graph.add_node(
+            VoxelGraphLabel::Trace,
+            ViewNodeRunner::new(trace, render_world),
+        );
         //voxel_graph.add_node(VoxelGraphLabel::Bloom, ViewNodeRunner::new(bloom, render_world));
-        voxel_graph.add_node(VoxelGraphLabel::Tonemapping, ViewNodeRunner::new(tonemapping, render_world));
-        voxel_graph.add_node(VoxelGraphLabel::Fxaa, ViewNodeRunner::new(fxaa, render_world));
+        voxel_graph.add_node(
+            VoxelGraphLabel::Tonemapping,
+            ViewNodeRunner::new(tonemapping, render_world),
+        );
+        voxel_graph.add_node(
+            VoxelGraphLabel::Fxaa,
+            ViewNodeRunner::new(fxaa, render_world),
+        );
         voxel_graph.add_node(VoxelGraphLabel::Ui, ui);
-        voxel_graph.add_node(VoxelGraphLabel::Upscaling, ViewNodeRunner::new(upscaling, render_world));
+        voxel_graph.add_node(
+            VoxelGraphLabel::Upscaling,
+            ViewNodeRunner::new(upscaling, render_world),
+        );
 
         voxel_graph.add_node_edge(VoxelGraphLabel::Trace, VoxelGraphLabel::Tonemapping);
         //voxel_graph.add_node_edge(VoxelGraphLabel::Bloom, VoxelGraphLabel::Tonemapping);

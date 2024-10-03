@@ -20,8 +20,6 @@ bevy = { version = "0.14", default-features = false, features = [
 bytemuck = "1.15.0"
 dot_vox = "5.1.1"
 wgpu = "0.20.1"
-
-[dev-dependencies]
 bevy_egui = "0.29"
 rand = "0.8"
 tinyfiledialogs = "3.9"

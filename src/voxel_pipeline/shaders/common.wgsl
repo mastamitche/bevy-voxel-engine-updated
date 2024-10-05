@@ -15,6 +15,10 @@ struct Portal {
     position: vec3<f32>,
     normal: vec3<f32>,
 }
+struct ChunkInfo {
+    position: vec3<i32>,
+    texture_index: u32,
+}
 
 struct VoxelUniforms {
     materials: array<vec4<f32>, 256>,
@@ -22,7 +26,9 @@ struct VoxelUniforms {
     levels: array<vec4<u32>, 8>,
     offsets: array<vec4<u32>, 8>,
     texture_size: u32,
-};
+    chunk_size: u32,
+    active_chunks: array<ChunkInfo, 27>, // 3x3x3 chunk grid around player
+}
 
 struct TraceUniforms {
     camera: mat4x4<f32>,

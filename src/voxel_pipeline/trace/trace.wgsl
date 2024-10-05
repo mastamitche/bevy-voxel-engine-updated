@@ -11,7 +11,7 @@
     shoot_ray,
 }
 #import bevy_voxel_engine::bindings::{
-    voxel_world,
+    voxel_worlds,
     voxel_uniforms,
     gh
 }
@@ -54,13 +54,27 @@ fn calculate_direct(sun_dir: vec3<f32>, sky_color: vec3<f32>, material: vec4<f32
 
     return DirectLightningInfo(color, shadow);
 }
-
+fn get_chunk_index(world_pos: vec3<f32>) -> i32 {
+    let chunk_pos = floor(world_pos / f32(voxel_uniforms.chunk_size));
+    for (var i = 0; i < 27; i++) {
+        if (all(chunk_pos == vec3<f32>(voxel_uniforms.active_chunks[i].position))) {
+            return i32(voxel_uniforms.active_chunks[i].texture_index);
+        }
+    }
+    return -1; // Out of bounds
+}
 fn get_voxel(pos: vec3<f32>) -> f32 {
-    if any(pos < vec3(0.0)) || any(pos >= vec3(f32(voxel_uniforms.texture_size))) {
+    let chunk_index = get_chunk_index(pos);
+    if (chunk_index == -1) {
         return 0.0;
     }
 
-    let voxel = textureLoad(voxel_world, vec3<i32>(pos.zyx));
+    let chunk_pos = pos % vec3(f32(voxel_uniforms.chunk_size));
+    if any(chunk_pos < vec3(0.0)) || any(chunk_pos >= vec3(f32(voxel_uniforms.chunk_size))) {
+        return 0.0;
+    }
+
+    let voxel = textureLoad(voxel_worlds[chunk_index], vec3<i32>(chunk_pos.zyx));
     
     return min(f32(voxel.r & 0xFFu), 1.0);
 }
@@ -71,8 +85,18 @@ fn vertex_ao(side: vec2<f32>, corner: f32) -> f32 {
 }
 
 fn voxel_ao(pos: vec3<f32>, d1: vec3<f32>, d2: vec3<f32>) -> vec4<f32> {
-    let side = vec4(get_voxel(pos + d1), get_voxel(pos + d2), get_voxel(pos - d1), get_voxel(pos - d2));
-    let corner = vec4(get_voxel(pos + d1 + d2), get_voxel(pos - d1 + d2), get_voxel(pos - d1 - d2), get_voxel(pos + d1 - d2));
+    let side = vec4(
+        get_voxel(pos + d1),
+        get_voxel(pos + d2),
+        get_voxel(pos - d1),
+        get_voxel(pos - d2)
+    );
+    let corner = vec4(
+        get_voxel(pos + d1 + d2),
+        get_voxel(pos - d1 + d2),
+        get_voxel(pos - d1 - d2),
+        get_voxel(pos + d1 - d2)
+    );
 
     var ao: vec4<f32>;
     ao.x = vertex_ao(side.xy, corner.x);
@@ -82,7 +106,6 @@ fn voxel_ao(pos: vec3<f32>, d1: vec3<f32>, d2: vec3<f32>) -> vec4<f32> {
 
     return 1.0 - ao;
 }
-
 fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
     return x - y * floor(x / y);
 }
@@ -133,7 +156,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let direct_lighting = calculate_direct(skybox_info.sun_dir, skybox_info.sky_color, hit.material, hit.pos, hit.normal, seed + 1u, trace_uniforms.samples);
 
         // Indirect lighting
-        let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.texture_size) / 2.0;
+        let texture_coords = hit.pos * VOXELS_PER_METER;
         let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
         let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
 

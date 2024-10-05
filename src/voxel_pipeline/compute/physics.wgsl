@@ -7,9 +7,10 @@
 #import bevy_voxel_engine::raytracing::{
     IDENTITY,
     shoot_ray,
+    get_chunk_index,
 }
 #import bevy_voxel_engine::bindings::{
-    voxel_world,
+    voxel_worlds,
     voxel_uniforms,
     gh
 }
@@ -99,21 +100,26 @@ fn physics(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
                                         continue;
                                     }
 
+                                    let chunk_index = get_chunk_index(world_pos + vec3<f32>(offset) / VOXELS_PER_METER);
+                                    if (chunk_index == -1) {
+                                        continue; // Skip if outside active chunks
+                                    }
+
                                     // Destroy
                                     if (collision_effect.x == 1.0) {
-                                        textureStore(voxel_world, texture_coords.zyx, vec4(0u));
+                                    textureStore(voxel_worlds[chunk_index], texture_coords.zyx, vec4(0u));
                                     }
                                     // Place
                                     if (collision_effect.x == 2.0) {
                                         let material = bitcast<u32>(collision_effect.z);
-                                        textureStore(voxel_world, texture_coords.zyx, vec4(material));
+                                        textureStore(voxel_worlds[chunk_index], texture_coords.zyx, vec4(material));
                                     }
                                     // Set Flags
                                     if (collision_effect.x == 3.0) {
                                         let flags = bitcast<u32>(collision_effect.z);
-                                        var voxel = textureLoad(voxel_world, texture_coords.zyx).r;
+                                        var voxel = textureLoad(voxel_worlds[chunk_index], texture_coords.zyx).r;
                                         voxel |= flags << 8u;
-                                        textureStore(voxel_world, texture_coords.zyx, vec4(voxel));
+                                        textureStore(voxel_worlds[chunk_index], texture_coords.zyx, vec4(voxel));
                                     }
                                 }
                             }

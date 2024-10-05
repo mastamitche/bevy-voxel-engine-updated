@@ -11,7 +11,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 pub struct VoxelWorldPlugin;
 
@@ -42,6 +42,8 @@ impl Plugin for VoxelWorldPlugin {
             levels,
             offsets,
             texture_size,
+            chunk_size: 32, // Set an appropriate chunk size
+            active_chunks: [ChunkInfo::default(); 27], // 3x3x3 grid of chunks
         };
         let mut uniform_buffer = UniformBuffer::from(voxel_uniforms.clone());
         uniform_buffer.write_buffer(&render_device, &render_queue);
@@ -66,7 +68,6 @@ impl Plugin for VoxelWorldPlugin {
             TextureDataOrder::default(),
             &gh.texture_data.clone(),
         );
-        let voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
 
         // Storage
         let grid_hierarchy = render_device.create_buffer_with_data(&BufferInitDescriptor {
@@ -104,7 +105,7 @@ impl Plugin for VoxelWorldPlugin {
                         format: TextureFormat::R16Uint,
                         view_dimension: TextureViewDimension::D3,
                     },
-                    count: None,
+                    count: NonZeroU32::new(27), // 3x3x3 grid of chunks
                 },
                 BindGroupLayoutEntry {
                     binding: 2,
@@ -124,6 +125,29 @@ impl Plugin for VoxelWorldPlugin {
                 },
             ],
         );
+        let chunk_textures: [TextureView; 27] = std::array::from_fn(|_| {
+            let texture = render_device.create_texture_with_data(
+                &render_queue,
+                &TextureDescriptor {
+                    label: None,
+                    size: Extent3d {
+                        width: voxel_uniforms.chunk_size,
+                        height: voxel_uniforms.chunk_size,
+                        depth_or_array_layers: voxel_uniforms.chunk_size,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D3,
+                    format: TextureFormat::R16Uint,
+                    usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+                TextureDataOrder::default(),
+                &gh.texture_data.clone(),
+            );
+            texture.create_view(&TextureViewDescriptor::default())
+        }); 
+        let chunk_texture_refs: [&wgpu::TextureView; 27] = chunk_textures.each_ref().map(|tv| &**tv);
 
         let bind_group = render_device.create_bind_group(
             None,
@@ -135,7 +159,7 @@ impl Plugin for VoxelWorldPlugin {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&voxel_world),
+                    resource: BindingResource::TextureViewArray(&chunk_texture_refs),
                 },
                 BindGroupEntry {
                     binding: 2,
@@ -147,6 +171,7 @@ impl Plugin for VoxelWorldPlugin {
                 },
             ],
         );
+
 
         app.insert_resource(LoadVoxelWorld::None)
             .insert_resource(NewGH::None)
@@ -160,7 +185,7 @@ impl Plugin for VoxelWorldPlugin {
         render_app
             .insert_resource(VoxelData {
                 uniform_buffer,
-                voxel_world,
+                chunk_textures,
                 grid_hierarchy,
                 texture_sampler,
                 bind_group_layout,
@@ -175,7 +200,7 @@ impl Plugin for VoxelWorldPlugin {
 #[derive(Resource)]
 pub struct VoxelData {
     pub uniform_buffer: UniformBuffer<VoxelUniforms>,
-    pub voxel_world: TextureView,
+    pub chunk_textures: [TextureView; 27],
     pub grid_hierarchy: Buffer,
     pub texture_sampler: Sampler,
     pub bind_group_layout: BindGroupLayout,
@@ -204,6 +229,12 @@ pub struct ExtractedPortal {
     pub normal: Vec3,
 }
 
+#[derive(Default, Clone, Copy, ShaderType)]
+pub struct ChunkInfo {
+    pub position: Vec3,
+    pub texture_index: u32,
+}
+
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
 pub struct VoxelUniforms {
     pub pallete: [PalleteEntry; 256],
@@ -211,8 +242,9 @@ pub struct VoxelUniforms {
     pub levels: [UVec4; 8],
     pub offsets: [UVec4; 8],
     pub texture_size: u32,
+    pub chunk_size: u32,
+    pub active_chunks: [ChunkInfo; 27],
 }
-
 #[derive(Resource, ExtractResource, Clone)]
 enum NewGH {
     Some(Arc<GH>),
@@ -230,7 +262,6 @@ fn prepare_uniforms(
         .uniform_buffer
         .write_buffer(&render_device, &render_queue);
 }
-
 fn load_voxel_world(
     mut load_voxel_world: ResMut<LoadVoxelWorld>,
     mut new_gh: ResMut<NewGH>,
@@ -255,6 +286,17 @@ fn load_voxel_world(
             voxel_uniforms.pallete = gh.pallete.clone().into();
             voxel_uniforms.levels = levels;
             voxel_uniforms.texture_size = gh.texture_size;
+
+            // Initialize active chunks
+            for i in 0..27 {
+                let x = (i % 3) as f32 - 1.0;
+                let y = ((i / 3) % 3) as f32 - 1.0;
+                let z = (i / 9) as f32 - 1.0;
+                voxel_uniforms.active_chunks[i] = ChunkInfo {
+                    position: Vec3::new(x, y, z) * voxel_uniforms.chunk_size as f32,
+                    texture_index: i as u32,
+                };
+            }
 
             *new_gh = NewGH::Some(Arc::new(gh));
             *load_voxel_world = LoadVoxelWorld::None;
@@ -282,30 +324,39 @@ fn load_voxel_world_prepare(
         });
 
         // voxel world
-        let voxel_world = render_device.create_texture_with_data(
-            &render_queue,
-            &TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: gh.texture_size,
-                    height: gh.texture_size,
-                    depth_or_array_layers: gh.texture_size,
+        // let voxel_world = 
+        // voxel_data.voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
+        let chunk_textures: [TextureView; 27] = std::array::from_fn(|_| {
+            let texture = render_device.create_texture_with_data(
+                &render_queue,
+                &TextureDescriptor {
+                    label: None,
+                    size: Extent3d {
+                        width: gh.texture_size,
+                        height: gh.texture_size,
+                        depth_or_array_layers: gh.texture_size,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D3,
+                    format: TextureFormat::R16Uint,
+                    usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
+                    view_formats: &[],
                 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D3,
-                format: TextureFormat::R16Uint,
-                usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            TextureDataOrder::default(),
-            &gh.texture_data,
-        );
-        voxel_data.voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
+                TextureDataOrder::default(),
+                &gh.texture_data,
+            );
+            texture.create_view(&TextureViewDescriptor::default())
+        });
+
+        voxel_data.chunk_textures = chunk_textures;
+    
     }
 }
 
 fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<VoxelData>) {
+    let chunk_texture_refs: [&wgpu::TextureView; 27] = voxel_data.chunk_textures.each_ref().map(|tv| &**tv);
+
     let bind_group = render_device.create_bind_group(
         None,
         &voxel_data.bind_group_layout,
@@ -316,7 +367,7 @@ fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<Vox
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::TextureView(&voxel_data.voxel_world),
+                resource: BindingResource::TextureViewArray(&chunk_texture_refs),
             },
             BindGroupEntry {
                 binding: 2,

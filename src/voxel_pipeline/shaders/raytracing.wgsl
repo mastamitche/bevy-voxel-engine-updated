@@ -24,8 +24,7 @@ struct Voxel {
     pos: vec3<f32>,
     grid_size: u32,
 };
-
-fn get_value(pos: vec3<f32>) -> Voxel {
+fn get_value(pos: vec3<f32>, chunk_index: i32) -> Voxel {
     let scaled = pos * 0.5 + 0.5;
 
     let size0 = voxel_uniforms.levels[0].x;
@@ -87,13 +86,20 @@ fn get_value(pos: vec3<f32>) -> Voxel {
         let rounded_pos = ((vec3<f32>(scaled7) + 0.5) / f32(size7)) * 2.0 - 1.0;
         return Voxel(0u, rounded_pos, size7);
     }
-
     let rounded_pos = (floor(pos * f32(voxel_uniforms.texture_size) * 0.5) + 0.5) / (f32(voxel_uniforms.texture_size) * 0.5);
-    let data = textureLoad(voxel_world, vec3<i32>(scaled * f32(voxel_uniforms.texture_size)).zyx).r;
+    let data = textureLoad(voxel_worlds[chunk_index], vec3<i32>(scaled * f32(voxel_uniforms.texture_size)).zyx).r;
 
     return Voxel(data, rounded_pos, voxel_uniforms.texture_size);
 }
-
+fn get_chunk_index(world_pos: vec3<f32>) -> i32 {
+    let chunk_pos = floor(world_pos / f32(voxel_uniforms.chunk_size));
+    for (var i = 0; i < 27; i++) {
+        if (all(chunk_pos == vec3<f32>(voxel_uniforms.active_chunks[i].position))) {
+            return i32(voxel_uniforms.active_chunks[i].texture_index);
+        }
+    }
+    return -1; // Out of bounds
+}
 struct HitInfo {
     hit: bool,
     data: u32,
@@ -167,7 +173,12 @@ fn shoot_ray(r: Ray, physics_distance: f32, flags: u32) -> HitInfo {
     var portal_mat = IDENTITY;
     var reprojection_pos = pos;
     while (steps < 100u) {
-        voxel = get_value(tcpotr);
+        let chunk_index = get_chunk_index(tcpotr);
+        if (chunk_index == -1) {
+            break; // Ray has left the active chunks
+        }
+
+        voxel = get_value(tcpotr, chunk_index);
 
         let should_portal_skip = ((voxel.data >> 8u) & PORTAL_FLAG) > 0u;
         if ((voxel.data & 0xFFu) != 0u && !should_portal_skip && (((voxel.data >> 8u) & flags) > 0u || flags == 0u)) {

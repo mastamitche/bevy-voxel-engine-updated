@@ -6,13 +6,21 @@
 @group(0) @binding(0)
 var<uniform> voxel_uniforms: VoxelUniforms;
 @group(0) @binding(1)
-var voxel_world: texture_storage_3d<r16uint, read_write>;
-// Mind the atomic here, this is why we don't import bindings.wgsl
+var voxel_worlds: binding_array<texture_storage_3d<r16uint, read_write>>;
 @group(0) @binding(2)
 var<storage, read_write> gh: array<atomic<u32>>;
-
-fn get_texture_value(pos: vec3<i32>) -> vec2<u32> {
-    let texture_value = textureLoad(voxel_world, pos.zyx).r;
+fn get_chunk_index(world_pos: vec3<f32>) -> i32 {
+    let chunk_pos = floor(world_pos / f32(voxel_uniforms.chunk_size));
+    for (var i = 0; i < 27; i++) {
+        if (all(chunk_pos == vec3<f32>(voxel_uniforms.active_chunks[i].position))) {
+            return i32(voxel_uniforms.active_chunks[i].texture_index);
+        }
+    }
+    return -1; // Out of bounds
+}
+fn get_texture_value(pos: vec3<i32>, chunk_index: i32) -> vec2<u32> {
+    let chunk_pos = pos % vec3(i32(voxel_uniforms.chunk_size));
+    let texture_value = textureLoad(voxel_worlds[chunk_index], chunk_pos.zyx).r;
     return vec2(
         texture_value & 0xFFu,
         texture_value >> 8u,
@@ -25,11 +33,18 @@ fn set_value_index(index: u32) {
 
 @compute @workgroup_size(4, 4, 4)
 fn rebuild_gh(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let pos = vec3(i32(invocation_id.x), i32(invocation_id.y), i32(invocation_id.z));
+    let chunk_index = get_chunk_index(vec3<f32>(invocation_id));
+    if (chunk_index == -1) {
+        return; // Skip if out of bounds
+    }
+
+    let pos = vec3(i32(invocation_id.x), i32(invocation_id.y), i32(invocation_id.z)) % vec3(i32(voxel_uniforms.chunk_size));
     
-    let material = get_texture_value(pos);
+    let material = get_texture_value(pos, chunk_index);
     if (material.x != 0u || (material.y & PORTAL_FLAG) > 0u) {
         // set bits in grid hierarchy
+        let world_pos = vec3<u32>(invocation_id);
+        
         let size0 = voxel_uniforms.levels[0].x;
         let size1 = voxel_uniforms.levels[1].x;
         let size2 = voxel_uniforms.levels[2].x;

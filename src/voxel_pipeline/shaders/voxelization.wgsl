@@ -15,7 +15,7 @@ struct VoxelizationUniforms {
 }
 
 @group(2) @binding(0) var<uniform> voxel_uniforms: VoxelUniforms;
-@group(2) @binding(1) var voxel_worlds: binding_array<texture_storage_3d<r16uint, read_write>>;
+@group(2) @binding(1) var voxel_worlds: binding_array<texture_storage_3d<r16uint, read_write>, 27>;
 @group(2) @binding(2) var<storage, read> gh: array<u32>;
 
 @group(3) @binding(0) var<uniform> voxelization_uniforms: VoxelizationUniforms;
@@ -46,23 +46,34 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     return out;
 }
 
-fn get_texture_value(pos: vec3<i32>) -> vec2<u32> {
-    let texture_value = textureLoad(voxel_world, pos.zyx).r;
+fn get_chunk_index(world_pos: vec3<f32>) -> i32 {
+    let chunk_pos = floor(world_pos / f32(voxel_uniforms.chunk_size));
+    for (var i = 0; i < 27; i++) {
+        if (all(chunk_pos == vec3<f32>(voxel_uniforms.active_chunks[i].position))) {
+            return i32(voxel_uniforms.active_chunks[i].texture_index);
+        }
+    }
+    return -1; // Out of bounds
+}
 
+fn get_texture_value(pos: vec3<i32>, chunk_index: i32) -> vec2<u32> {
+    let chunk_pos = pos % vec3(i32(voxel_uniforms.chunk_size));
+    let texture_value = textureLoad(voxel_worlds[chunk_index], chunk_pos.zyx).r;
     return vec2(
         texture_value & 0xFFu,
         texture_value >> 8u,
     );
 }
 
-
 fn write_pos(pos: vec3<i32>, material: u32, flags: u32, chunk_index: i32) {
+    let chunk_pos = pos % vec3(i32(voxel_uniforms.chunk_size));
     let voxel_type = get_texture_value(pos, chunk_index);
 
     if (voxel_type.x == 0u) {
-        textureStore(voxel_worlds[chunk_index], pos.zyx, vec4(material | (flags << 8u)));
+        textureStore(voxel_worlds[chunk_index], chunk_pos.zyx, vec4<u32>(material | (flags << 8u)));
     }
 }
+
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let clip_space_xy = vec2(1.0, -1.0) * (2.0 * in.pos.xy / f32(voxel_uniforms.texture_size) - 1.0);
@@ -77,10 +88,12 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         material = voxelization_uniforms.material;
     }
+    
     let chunk_index = get_chunk_index(world);
     if (chunk_index != -1) {
         write_pos(vec3<i32>(texture_pos), material, voxelization_uniforms.flags, chunk_index);
     }
+    
     let color = voxel_uniforms.materials[material].rgb;
     
     return vec4<f32>(color, 1.0);

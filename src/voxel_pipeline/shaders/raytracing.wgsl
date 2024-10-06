@@ -10,7 +10,7 @@
     ray_box_dist,
 }
 #import bevy_voxel_engine::bindings::{
-    voxel_world,
+    voxel_worlds,
     voxel_uniforms,
     gh
 }

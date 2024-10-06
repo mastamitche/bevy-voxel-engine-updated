@@ -1,7 +1,7 @@
 #import bevy_voxel_engine::common::VoxelUniforms
 
 #import bevy_voxel_engine::bindings::{
-    voxel_world,
+    voxel_worlds,
     voxel_uniforms,
     gh
 }
@@ -16,8 +16,19 @@ var<uniform> compute_uniforms: ComputeUniforms;
 @group(1) @binding(2)
 var<storage, read> animation_data: array<u32>;
 
-fn get_texture_value(pos: vec3<i32>) -> vec2<u32> {
-    let texture_value = textureLoad(voxel_world, pos.zyx).r;
+fn get_chunk_index(world_pos: vec3<f32>) -> i32 {
+    let chunk_pos = floor(world_pos / f32(voxel_uniforms.chunk_size));
+    for (var i = 0; i < 27; i++) {
+        if (all(chunk_pos == vec3<f32>(voxel_uniforms.active_chunks[i].position))) {
+            return i32(voxel_uniforms.active_chunks[i].texture_index);
+        }
+    }
+    return -1; // Out of bounds
+}
+
+fn get_texture_value(pos: vec3<i32>, chunk_index: i32) -> vec2<u32> {
+    let chunk_pos = pos % vec3(i32(voxel_uniforms.chunk_size));
+    let texture_value = textureLoad(voxel_worlds[chunk_index], chunk_pos.zyx).r;
     return vec2(
         texture_value & 0xFFu,
         texture_value >> 8u,
@@ -25,9 +36,15 @@ fn get_texture_value(pos: vec3<i32>) -> vec2<u32> {
 }
 
 fn write_pos(pos: vec3<i32>, material: u32, flags: u32) {
-    let voxel_type = get_texture_value(pos);
+    let chunk_index = get_chunk_index(vec3<f32>(pos));
+    if (chunk_index == -1) {
+        return; // Skip if out of bounds
+    }
+    
+    let chunk_pos = pos % vec3(i32(voxel_uniforms.chunk_size));
+    let voxel_type = get_texture_value(pos, chunk_index);
     if (voxel_type.x == 0u) {
-        textureStore(voxel_world, pos.zyx, vec4(material | (flags << 8u)));
+        textureStore(voxel_worlds[chunk_index], chunk_pos.zyx, vec4<u32>(material | (flags << 8u)));
     }
 }
 

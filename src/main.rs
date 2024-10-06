@@ -122,7 +122,7 @@ fn setup(
     let character_transform = Transform::from_xyz(0.0, 60.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y);
 
     let projection = Projection::Perspective(PerspectiveProjection {
-        fov: PI / 2.0,
+        fov: PI / 4.0,
         ..default()
     });
 

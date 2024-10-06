@@ -171,7 +171,7 @@ fn automata(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
                     }
 
                     let new_pos = pos + offset;
-                    let new_mat = get_texture_value(new_pos);
+                    let new_mat = get_texture_value(new_pos, new_chunk_index);
 
                     if (in_texture_bounds(new_pos) && new_mat.x == 0u) {
                         textureStore(voxel_worlds[new_chunk_index], new_pos.zyx, vec4(material.x | (material.y << 8u)));
@@ -202,7 +202,7 @@ fn automata(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
         }
 
         let new_pos = pos + offset;
-        let new_mat = get_texture_value(new_pos);
+        let new_mat = get_texture_value(new_pos,  chunk_index);
         if (in_texture_bounds(new_pos) && new_mat.x == 0u && rand.z > 0.08) {
             let new_material = min(material.x + u32(rand.y * 1.3), 13u);
             textureStore(voxel_worlds[chunk_index], new_pos.zyx, vec4(new_material | (AUTOMATA_FLAG << 8u)));
@@ -254,7 +254,7 @@ fn automata(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     // water
     if (material.x == 8u && (material.y & ANIMATION_FLAG) == 0u) {
         let new_pos = pos + vec3(0, -1, 0);
-        let new_mat = get_texture_value(new_pos);
+        let new_mat = get_texture_value(new_pos, chunk_index);
 
         if (in_texture_bounds(new_pos) && new_mat.x == 0u) {
             textureStore(voxel_worlds[chunk_index], new_pos.zyx, vec4(material.x | (material.y << 8u)));
@@ -291,7 +291,7 @@ fn automata(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
                     if (any(offset != -check)) {
                         let check_pos = pos + offset + check;
-                        let check_mat = get_texture_value(check_pos);
+                        let check_mat = get_texture_value(new_pos,  chunk_index);
 
                         if (in_texture_bounds(check_pos) && check_mat.x == 8u) {
                             safe = false;
@@ -302,7 +302,7 @@ fn automata(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
                 if (safe) {
                     let new_pos = pos + offset;
-                    let new_mat = get_texture_value(new_pos);
+                    let new_mat = get_texture_value(new_pos,  chunk_index);
 
                     if (in_texture_bounds(new_pos) && new_mat.x == 0u) {
                         textureStore(voxel_worlds[chunk_index], new_pos.zyx, vec4(material.x | (material.y << 8u)));

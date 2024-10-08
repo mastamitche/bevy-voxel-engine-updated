@@ -22,8 +22,9 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = app.sub_app(RenderApp).world().resource::<RenderDevice>();
 
         let render_queue = app.sub_app(RenderApp).world().resource::<RenderQueue>();
-
-        let gh = GH::empty(256);
+        let original_size = 256;
+        let expanded_size = original_size * 3;
+        let gh = GH::empty(expanded_size);
         let buffer_size = gh.get_buffer_size();
         let texture_size = gh.texture_size;
         let gh_offsets = gh.get_offsets();
@@ -46,15 +47,46 @@ impl Plugin for VoxelWorldPlugin {
         let mut uniform_buffer = UniformBuffer::from(voxel_uniforms.clone());
         uniform_buffer.write_buffer(&render_device, &render_queue);
 
+        // Create expanded texture data
+        let mut expanded_texture_data = vec![0u8; gh.texture_data.len()];
+        for x in 0..3 {
+            for y in 0..3 {
+                for z in 0..3 {
+                    for (i, &value) in gh.texture_data
+                        [..(original_size * original_size * original_size * 2) as usize]
+                        .iter()
+                        .enumerate()
+                    {
+                        let original_x = (i / 2) / (original_size * original_size) as usize;
+                        let original_y =
+                            ((i / 2) / original_size as usize) % original_size as usize;
+                        let original_z = (i / 2) % original_size as usize;
+
+                        let new_x = original_x + x * original_size as usize;
+                        let new_y = original_y + y * original_size as usize;
+                        let new_z = original_z + z * original_size as usize;
+
+                        let new_index = ((new_x * expanded_size as usize * expanded_size as usize)
+                            + (new_y * expanded_size as usize)
+                            + new_z)
+                            * 2
+                            + (i % 2);
+
+                        expanded_texture_data[new_index] = value;
+                    }
+                }
+            }
+        }
+
         // Texture
         let voxel_world = render_device.create_texture_with_data(
             &render_queue,
             &TextureDescriptor {
                 label: None,
                 size: Extent3d {
-                    width: gh.texture_size,
-                    height: gh.texture_size,
-                    depth_or_array_layers: gh.texture_size,
+                    width: texture_size,
+                    height: texture_size,
+                    depth_or_array_layers: texture_size,
                 },
                 mip_level_count: 1,
                 sample_count: 1,
@@ -64,7 +96,7 @@ impl Plugin for VoxelWorldPlugin {
                 view_formats: &[],
             },
             TextureDataOrder::default(),
-            &gh.texture_data.clone(),
+            &expanded_texture_data,
         );
         let voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
 
@@ -273,6 +305,7 @@ fn load_voxel_world_prepare(
 ) {
     if let NewGH::Some(gh) = new_gh.as_ref() {
         let buffer_size = gh.get_buffer_size();
+        let original_size = gh.texture_size / 3; // Assuming gh is already expanded
 
         // grid hierarchy
         voxel_data.grid_hierarchy = render_device.create_buffer_with_data(&BufferInitDescriptor {
@@ -280,6 +313,38 @@ fn load_voxel_world_prepare(
             label: None,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
+
+        // Create expanded texture data
+        let mut expanded_texture_data = vec![0u8; gh.texture_data.len()];
+        for x in 0..3 {
+            for y in 0..3 {
+                for z in 0..3 {
+                    for (i, &value) in gh.texture_data
+                        [..(original_size * original_size * original_size * 2) as usize]
+                        .iter()
+                        .enumerate()
+                    {
+                        let original_x = (i / 2) / (original_size * original_size) as usize;
+                        let original_y =
+                            ((i / 2) / original_size as usize) % original_size as usize;
+                        let original_z = (i / 2) % original_size as usize;
+
+                        let new_x = original_x + x * original_size as usize;
+                        let new_y = original_y + y * original_size as usize;
+                        let new_z = original_z + z * original_size as usize;
+
+                        let new_index =
+                            ((new_x * gh.texture_size as usize * gh.texture_size as usize)
+                                + (new_y * gh.texture_size as usize)
+                                + new_z)
+                                * 2
+                                + (i % 2);
+
+                        expanded_texture_data[new_index] = value;
+                    }
+                }
+            }
+        }
 
         // voxel world
         let voxel_world = render_device.create_texture_with_data(
@@ -299,7 +364,7 @@ fn load_voxel_world_prepare(
                 view_formats: &[],
             },
             TextureDataOrder::default(),
-            &gh.texture_data,
+            &expanded_texture_data,
         );
         voxel_data.voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
     }

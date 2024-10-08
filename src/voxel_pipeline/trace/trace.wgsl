@@ -98,13 +98,13 @@ fn calculate_sun_progress(sun_dir: vec3<f32>) -> f32 {
 
     // Calculate the angle between sun_dir and the "up" vector
     let angle = angle_between_vectors(sun_dir, up);
-
+    return 1.0;
     // If the sun is below the horizon or exactly at the horizon, return 0
-    if (angle > PI / 2.0) {
-        return mix(0.2, 1.0, -sun_dir.y);
-    }
+    // if (angle > PI / 2.0) {
+    //     return mix(0.2, 1.0, -sun_dir.y);
+    // }
 
-    return 0.2;
+    // return 0.2;
 }
 
 @fragment

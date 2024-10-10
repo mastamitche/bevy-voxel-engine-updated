@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::Flags;
 
 #[derive(Clone)]
-pub struct GH {
+pub struct GridHierarchy {
     pub levels: [u32; 8],
     pub texture_size: u32,
     pub texture_data: Vec<u8>,
@@ -13,7 +13,7 @@ pub struct GH {
 #[derive(Clone, Deref, DerefMut)]
 pub struct Pallete([[f32; 4]; 256]);
 
-impl GH {
+impl GridHierarchy {
     pub fn empty(texture_size: u32) -> Self {
         let mut levels = [0; 8];
         let i = texture_size.trailing_zeros() - 3;
@@ -51,7 +51,7 @@ impl GH {
         Self::get_buffer_size_from_levels(&self.levels)
     }
 
-    pub fn from_vox(file: &[u8]) -> Result<GH, String> {
+    pub fn from_vox(file: &[u8]) -> Result<GridHierarchy, String> {
         let vox = dot_vox::load_bytes(file)?;
         let size = vox.models[0].size;
         let max_dim = size.x.max(size.y).max(size.z);
@@ -66,7 +66,7 @@ impl GH {
             ));
         }
 
-        let mut gh = GH::empty(dim as u32);
+        let mut gh = GridHierarchy::empty(dim as u32);
 
         for i in 0..256 {
             let colour = vox.palette[i];
@@ -99,8 +99,7 @@ impl GH {
                 voxel.y as i32,
             );
 
-            let index = 
-                pos.x as usize * dim * dim + pos.y as usize * dim + pos.z as usize;
+            let index = pos.x as usize * dim * dim + pos.y as usize * dim + pos.z as usize;
 
             gh.texture_data[index as usize * 2] = voxel.i;
             gh.texture_data[index as usize * 2 + 1] = Flags::COLLISION_FLAG;
@@ -111,21 +110,20 @@ impl GH {
 
     fn next_power_of_2(number: u32) -> u32 {
         let mut n = number;
-        
+
         // Subtract 1 from the number
         n -= 1;
-        
+
         // Perform a bitwise OR operation to set all the lower bits to 1
         n |= n >> 1;
         n |= n >> 2;
         n |= n >> 4;
         n |= n >> 8;
         n |= n >> 16;
-        
+
         // Add 1 to get the next power of 2
         n += 1;
-        
+
         n
     }
-    
 }

@@ -1,5 +1,5 @@
 use crate::{
-    load::{Pallete, GH},
+    load::{GridHierarchy, Pallete},
     LoadVoxelWorld,
 };
 use bevy::{
@@ -23,7 +23,7 @@ impl Plugin for VoxelWorldPlugin {
 
         let render_queue = app.sub_app(RenderApp).world().resource::<RenderQueue>();
 
-        let gh = GH::empty(256);
+        let gh = GridHierarchy::empty(256);
         let buffer_size = gh.get_buffer_size();
         let texture_size = gh.texture_size;
         let gh_offsets = gh.get_offsets();
@@ -42,32 +42,12 @@ impl Plugin for VoxelWorldPlugin {
             levels,
             offsets,
             texture_size,
-            chunk_size: 32, // Set an appropriate chunk size
+            world_size: texture_size * 3,
+            chunk_size: texture_size, // Set an appropriate chunk size
             active_chunks: [ChunkInfo::default(); 27], // 3x3x3 grid of chunks
         };
         let mut uniform_buffer = UniformBuffer::from(voxel_uniforms.clone());
         uniform_buffer.write_buffer(&render_device, &render_queue);
-
-        // Texture
-        let voxel_world = render_device.create_texture_with_data(
-            &render_queue,
-            &TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: gh.texture_size,
-                    height: gh.texture_size,
-                    depth_or_array_layers: gh.texture_size,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D3,
-                format: TextureFormat::R16Uint,
-                usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            TextureDataOrder::default(),
-            &gh.texture_data.clone(),
-        );
 
         // Storage
         let grid_hierarchy = render_device.create_buffer_with_data(&BufferInitDescriptor {
@@ -146,8 +126,9 @@ impl Plugin for VoxelWorldPlugin {
                 &gh.texture_data.clone(),
             );
             texture.create_view(&TextureViewDescriptor::default())
-        }); 
-        let chunk_texture_refs: [&wgpu::TextureView; 27] = chunk_textures.each_ref().map(|tv| &**tv);
+        });
+        let chunk_texture_refs: [&wgpu::TextureView; 27] =
+            chunk_textures.each_ref().map(|tv| &**tv);
 
         let bind_group = render_device.create_bind_group(
             None,
@@ -172,11 +153,10 @@ impl Plugin for VoxelWorldPlugin {
             ],
         );
 
-
         app.insert_resource(LoadVoxelWorld::None)
-            .insert_resource(NewGH::None)
+            .insert_resource(NewGridHierarchy::None)
             .insert_resource(voxel_uniforms)
-            .add_plugins(ExtractResourcePlugin::<NewGH>::default())
+            .add_plugins(ExtractResourcePlugin::<NewGridHierarchy>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
             .add_systems(Update, load_voxel_world);
 
@@ -243,11 +223,12 @@ pub struct VoxelUniforms {
     pub offsets: [UVec4; 8],
     pub texture_size: u32,
     pub chunk_size: u32,
+    pub world_size: u32,
     pub active_chunks: [ChunkInfo; 27],
 }
 #[derive(Resource, ExtractResource, Clone)]
-enum NewGH {
-    Some(Arc<GH>),
+enum NewGridHierarchy {
+    Some(Arc<GridHierarchy>),
     None,
 }
 
@@ -264,16 +245,16 @@ fn prepare_uniforms(
 }
 fn load_voxel_world(
     mut load_voxel_world: ResMut<LoadVoxelWorld>,
-    mut new_gh: ResMut<NewGH>,
+    mut new_gh: ResMut<NewGridHierarchy>,
     mut voxel_uniforms: ResMut<VoxelUniforms>,
 ) {
     match load_voxel_world.as_ref() {
         LoadVoxelWorld::Empty(_) | LoadVoxelWorld::File(_) => {
             let gh = match load_voxel_world.as_ref() {
-                LoadVoxelWorld::Empty(size) => GH::empty(*size),
+                LoadVoxelWorld::Empty(size) => GridHierarchy::empty(*size),
                 LoadVoxelWorld::File(path) => {
                     let file = std::fs::read(path).unwrap();
-                    GH::from_vox(&file).unwrap()
+                    GridHierarchy::from_vox(&file).unwrap()
                 }
                 LoadVoxelWorld::None => unreachable!(),
             };
@@ -298,11 +279,11 @@ fn load_voxel_world(
                 };
             }
 
-            *new_gh = NewGH::Some(Arc::new(gh));
+            *new_gh = NewGridHierarchy::Some(Arc::new(gh));
             *load_voxel_world = LoadVoxelWorld::None;
         }
         LoadVoxelWorld::None => {
-            *new_gh = NewGH::None;
+            *new_gh = NewGridHierarchy::None;
         }
     }
 }
@@ -311,9 +292,9 @@ fn load_voxel_world_prepare(
     mut voxel_data: ResMut<VoxelData>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    new_gh: Res<NewGH>,
+    new_gh: Res<NewGridHierarchy>,
 ) {
-    if let NewGH::Some(gh) = new_gh.as_ref() {
+    if let NewGridHierarchy::Some(gh) = new_gh.as_ref() {
         let buffer_size = gh.get_buffer_size();
 
         // grid hierarchy
@@ -324,7 +305,7 @@ fn load_voxel_world_prepare(
         });
 
         // voxel world
-        // let voxel_world = 
+        // let voxel_world =
         // voxel_data.voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
         let chunk_textures: [TextureView; 27] = std::array::from_fn(|_| {
             let texture = render_device.create_texture_with_data(
@@ -350,12 +331,12 @@ fn load_voxel_world_prepare(
         });
 
         voxel_data.chunk_textures = chunk_textures;
-    
     }
 }
 
 fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<VoxelData>) {
-    let chunk_texture_refs: [&wgpu::TextureView; 27] = voxel_data.chunk_textures.each_ref().map(|tv| &**tv);
+    let chunk_texture_refs: [&wgpu::TextureView; 27] =
+        voxel_data.chunk_textures.each_ref().map(|tv| &**tv);
 
     let bind_group = render_device.create_bind_group(
         None,

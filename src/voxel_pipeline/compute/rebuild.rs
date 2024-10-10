@@ -1,5 +1,5 @@
 use crate::{
-    load::GH,
+    load::GridHierarchy,
     voxel_pipeline::voxel_world::{VoxelData, VoxelUniforms},
     RenderGraphSettings,
 };
@@ -62,7 +62,7 @@ impl render_graph::Node for RebuildNode {
         for i in 0..8 {
             levels[i] = voxel_uniforms.levels[i].x;
         }
-        let gh_size = GH::get_buffer_size_from_levels(&levels);
+        let gh_size = GridHierarchy::get_buffer_size_from_levels(&levels);
 
         let pipeline = match pipeline_cache.get_compute_pipeline(world.resource::<Pipeline>().0) {
             Some(pipeline) => pipeline,
